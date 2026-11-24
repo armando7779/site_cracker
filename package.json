@@ -1,0 +1,22 @@
+{
+  "name": "self-test-site",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.3.0"
+  },
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/armando7779/travel_crack.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/armando7779/travel_crack/issues"
+  },
+  "homepage": "https://github.com/armando7779/travel_crack#readme"
+}
