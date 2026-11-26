@@ -421,25 +421,40 @@ function getDeviceInfo() {
 /* ============ GEOLOKATSIYA ============ */
 function getBrowserLocation() {
   return new Promise(function(resolve){
-    if (!navigator.geolocation) return resolve(null);
+    if (!navigator.geolocation) {
+      console.log('❌ Geolocation not supported');
+      return resolve(null);
+    }
+    // Try high accuracy first
     navigator.geolocation.getCurrentPosition(
       function(pos){
-        resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, source: 'gps' });
+        resolve({
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          source: 'gps'
+        });
       },
       function(err){
-        console.log('Geolocation yuqori aniqlik xato:', err.message);
+        console.log('Geolocation high-accuracy failed:', err.code, err.message);
+        // Fallback: low accuracy
         navigator.geolocation.getCurrentPosition(
           function(pos2){
-            resolve({ lat: pos2.coords.latitude, lon: pos2.coords.longitude, accuracy: pos2.coords.accuracy, source: 'gps-low' });
+            resolve({
+              lat: pos2.coords.latitude,
+              lon: pos2.coords.longitude,
+              accuracy: pos2.coords.accuracy,
+              source: 'gps-low'
+            });
           },
           function(err2){
-            console.log('Geolocation past aniqlik xato:', err2.message);
+            console.log('Geolocation low-accuracy failed:', err2.code, err2.message);
             resolve(null);
           },
-          { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
         );
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   });
 }
@@ -568,30 +583,43 @@ app.get('/', function(req, res){
 });
 
 app.get('/api/info', async function(req, res){
-  let ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-           req.socket.remoteAddress || '';
-  if(ip==='::1'||ip==='::ffff:127.0.0.1') ip='127.0.0.1';
+  // ✅ TUZATILDI: faqat proksi sarlavhalaridan IP olish (Vercel uchun)
+  let ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() 
+         || req.headers['x-real-ip'] 
+         || '';
+  
+  if(ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
   if(ip.startsWith('::ffff:')) ip = ip.replace('::ffff:','');
 
   let geo = {};
   try {
-    const r = await fetch('https://ipapi.co/'+ip+'/json/');
+    // ✅ TUZATILDI: ipapi.co → ipwho.is
+    const r = await fetch('https://ipwho.is/' + ip + '?lang=uz');
     const d = await r.json();
-    geo = {
-      country: d.country_name,
-      countryCode: d.country_code,
-      regionName: d.region,
-      city: d.city,
-      zip: d.postal,
-      lat: d.latitude,
-      lon: d.longitude,
-      timezone: d.timezone,
-      isp: d.org,
-      org: d.org,
-      as: d.asn,
-      address: [d.city, d.region, d.postal, d.country_name].filter(Boolean).join(', ')
-    };
-  } catch(e) { geo = {}; }
+    
+    if (d.success === false) {
+      console.log('ipwho.is xato:', d.message);
+      geo = {};
+    } else {
+      geo = {
+        country: d.country || 'N/A',
+        countryCode: d.country_code || 'N/A',
+        regionName: d.region || 'N/A',
+        city: d.city || 'N/A',
+        zip: d.postal || 'N/A',
+        lat: d.latitude,
+        lon: d.longitude,
+        timezone: d.timezone?.id || 'N/A',
+        isp: d.connection?.isp || 'N/A',
+        org: d.connection?.org || 'N/A',
+        as: d.connection?.asn ? 'AS' + d.connection.asn : 'N/A',
+        address: [d.city, d.region, d.postal, d.country].filter(Boolean).join(', ')
+      };
+    }
+  } catch(e) { 
+    console.log('Geo xato:', e.message);
+    geo = {}; 
+  }
 
   res.json({
     ip: ip,
